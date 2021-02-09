@@ -367,7 +367,7 @@ def commit_and_push_version_update_changes(new_version, message_prefix):
 
         git_cmd("commit", "-a", "-m", f"{message_prefix} Updating OCP latest onprem-config to {new_version}")
 
-    git_cmd("git", "push", "origin", f"HEAD:{branch}")
+    git_cmd("push", "origin", f"HEAD:{branch}")
     return branch
 
 

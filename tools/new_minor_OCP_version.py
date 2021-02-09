@@ -248,7 +248,7 @@ def create_jira_ticket(jira_client, latest_version, current_version):
                                         issuetype={'name': 'Task'},
                                         description=ticket_text)
     jira_client.assign_issue(new_task, DEFAULT_ASSIGN)
-    logger.info(f"Task created: {new_task}")
+    logger.info(f"Task created: {new_task} - {JIRA_BROWSE_TICKET.format(ticket_id=new_task)}")
     add_watchers(jira_client, new_task)
     return new_task
 

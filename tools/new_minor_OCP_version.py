@@ -192,7 +192,7 @@ def create_task(args, current_assisted_service_ocp_version, latest_ocp_version):
 
 
 def get_latest_ocp_version():
-    return "4.6.99999"
+    return "4.6.999999"
     res = requests.get(OCP_LATEST_RELEASE_URL)
     if not res.ok:
         raise RuntimeError(f"GET {OCP_LATEST_RELEASE_URL} failed status {res.status_code}")
@@ -367,7 +367,7 @@ def commit_and_push_version_update_changes(new_version, message_prefix):
 
         git_cmd("commit", "-a", "-m", f"{message_prefix} Updating OCP latest onprem-config to {new_version}")
 
-    git_cmd("push", "origin", f"HEAD:{branch}")
+    git_cmd("push", "upstream", f"HEAD:{branch}")
     return branch
 
 

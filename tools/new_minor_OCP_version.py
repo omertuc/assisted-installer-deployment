@@ -141,18 +141,20 @@ def main(args):
                                                                         current_assisted_service_ocp_version,
                                                                         latest_ocp_version, task)
     logging.info(f"Using versions JSON {openshift_versions_json}")
-    pr = open_pr(args, current_assisted_service_ocp_version, latest_ocp_version, task)
-    test_success = test_changes(args, branch, pr)
+    github_pr = open_pr(args, current_assisted_service_ocp_version, latest_ocp_version, task)
+    test_success = test_changes(args, branch, github_pr)
 
     if test_success or True:
         fork = create_app_interface_fork(args)
         app_interface_branch = update_ai_app_sre_repo_to_new_ocp_version(fork, args, latest_ocp_version,
                                                                          openshift_versions_json, task)
-        pr = open_app_interface_pr(fork, app_interface_branch, current_assisted_service_ocp_version,
+        gitlab_pr = open_app_interface_pr(fork, app_interface_branch, current_assisted_service_ocp_version,
                                    latest_ocp_version,
                                    task)
 
-        jira_client.add_comment(task, f"Created a PR in app-interface GitLab {pr.web_url}")
+        jira_client.add_comment(task, f"Created a PR in app-interface GitLab {gitlab_pr.web_url}")
+        github_pr.create_issue_comment(f"Created a PR in app-interface GitLab {gitlab_pr.web_url}")
+
 
 
 def test_changes(args, branch, pr):
@@ -481,8 +483,6 @@ def open_app_interface_pr(fork, branch, current_version, new_version, task):
         'target_project_id': fork.forked_from_project["id"],
         'source_project_id': fork.id
     })
-
-    hold_pr(pr)
 
     logging.info(f"New PR opened {pr.web_url}")
 

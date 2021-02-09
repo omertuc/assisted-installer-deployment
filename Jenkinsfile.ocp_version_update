@@ -10,8 +10,6 @@ pipeline {
         JENKINS_CRED = credentials('bot-user-jenkins')
     }
 
-    triggers { cron('0 0 * * 0') }
-
     options {
       timeout(time: 2, unit: 'HOURS')
     }
@@ -28,16 +26,6 @@ pipeline {
                  --gitlab-token "${GITLAB_TOKEN}"\
                  --jenkins-user-password "${JENKINS_CRED}" '''
             }
-        }
-    }
-
-    post {
-        failure {
-            script {
-                def data = [text: "OCP version failed, see: ${BUILD_URL}"]
-                writeJSON(file: 'data.txt', json: data, pretty: 4)
-            }
-            sh '''curl -X POST -H 'Content-type: application/json' --data-binary "@data.txt"  https://hooks.slack.com/services/$SLACK_TOKEN'''
         }
     }
 }

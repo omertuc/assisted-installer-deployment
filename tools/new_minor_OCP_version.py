@@ -144,7 +144,7 @@ def main(args):
     pr = open_pr(args, current_assisted_service_ocp_version, latest_ocp_version, task)
     test_success = test_changes(args, branch, pr)
 
-    if test_success:
+    if test_success or True:
         fork = create_app_interface_fork(args)
         app_interface_branch = update_ai_app_sre_repo_to_new_ocp_version(fork, args, latest_ocp_version,
                                                                          openshift_versions_json, task)
@@ -176,8 +176,9 @@ def test_test_infra_passes(args, branch):
     jenkins_client.build_job(TEST_INFRA_JOB,
                              parameters={"SERVICE_BRANCH": branch, "NOTIFY": False, "JOB_NAME": "Update_ocp_version"})
     time.sleep(10)
+    url = jenkins_client.get_build_info(TEST_INFRA_JOB, next_build_number)["url"]
     while not jenkins_client.get_build_info(TEST_INFRA_JOB, next_build_number)["result"]:
-        logging.info("waiting for job to finish")
+        logging.info(f"Waiting for job {url} to finish")
         time.sleep(30)
     job_info = jenkins_client.get_build_info(TEST_INFRA_JOB, next_build_number)
     result = job_info["result"]
@@ -193,7 +194,7 @@ def create_task(args, current_assisted_service_ocp_version, latest_ocp_version):
 
 
 def get_latest_ocp_version():
-    return "4.6.999999999"
+    return "4.6.9999999999"
     res = requests.get(OCP_LATEST_RELEASE_URL)
     if not res.ok:
         raise RuntimeError(f"GET {OCP_LATEST_RELEASE_URL} failed status {res.status_code}")

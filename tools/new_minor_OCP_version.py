@@ -194,7 +194,7 @@ def create_task(args, current_assisted_service_ocp_version, latest_ocp_version):
 
 
 def get_latest_ocp_version():
-    return "4.6.9999999999"
+    return "4.6.99999999999"
     res = requests.get(OCP_LATEST_RELEASE_URL)
     if not res.ok:
         raise RuntimeError(f"GET {OCP_LATEST_RELEASE_URL} failed status {res.status_code}")
@@ -474,7 +474,7 @@ def open_app_interface_pr(fork, branch, current_version, new_version, task):
     body = f"{body}\nSee ticket {JIRA_BROWSE_TICKET.format(ticket_id=task)}"
 
     pr = fork.mergerequests.create({
-        'title': PR_MESSAGE.format(current_version=current_version, target_version=new_version, ticket_id=task),
+        'title': PR_MESSAGE.format(current_version=current_version, target_version=new_version, task=task),
         'description': body,
         'source_branch': branch,
         'target_branch': 'master',

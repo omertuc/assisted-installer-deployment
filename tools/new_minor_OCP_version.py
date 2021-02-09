@@ -148,8 +148,8 @@ def main(args):
         app_interface_branch = update_ai_app_sre_repo_to_new_ocp_version(fork, args, latest_ocp_version,
                                                                          openshift_versions_json, task)
         pr = open_app_interface_pr(fork, app_interface_branch, current_assisted_service_ocp_version,
-                                    latest_ocp_version,
-                                    task)
+                                   latest_ocp_version,
+                                   task)
 
         jira_client.add_comment(task, f"Created a PR in app-interface GitLab {pr.web_url}")
 
@@ -159,7 +159,7 @@ def test_changes(args, branch, pr):
     succeeded, url = test_test_infra_passes(args, branch)
     if succeeded:
         logging.info("Test-infra test passed, removing hold branch")
-        remove_hold_label(pr)
+        unhold_pr(pr)
         pr.create_issue_comment(f"test-infra test passed, HOLD label removed, see {url}")
     else:
         logging.warning("Test-infra test failed, not removing hold label")
@@ -183,10 +183,6 @@ def test_test_infra_passes(args, branch):
     url = job_info["url"]
     logging.info(f"Job finished with result {result}")
     return result == "SUCCESS", url
-
-
-def remove_hold_label(pr):
-    pr.remove_from_labels(HOLD_LABEL)
 
 
 def create_task(args, current_assisted_service_ocp_version, latest_ocp_version):
@@ -283,10 +279,9 @@ def clone_assisted_service(user_password):
     def git_cmd(*args: str):
         return cmd(("git", "-C", ASSISTED_SERVICE_CLONE_DIR) + args)
 
-    git_cmd(["remote", "add", "upstream", ASSISTED_SERVICE_UPSTREAM_URL])
-    git_cmd(["fetch", "upstream"])
-    git_cmd(["reset", "upstream/master", "--hard"])
-
+    git_cmd("remote", "add", "upstream", ASSISTED_SERVICE_UPSTREAM_URL)
+    git_cmd("fetch", "upstream")
+    git_cmd("reset", "upstream/master", "--hard")
 
 
 def clone_app_interface(gitlab_key_file):
@@ -455,15 +450,15 @@ def open_pr(args, current_version, new_version, task):
     pr = repo.create_pull(
         title=PR_MESSAGE.format(current_version=current_version, target_version=new_version, task=task),
         body=body,
-        head=branch,
+        head=f"{github_client.get_user().login}:{branch}",
         base="master"
     )
-    pr.add_to_labels(HOLD_LABEL)
+    hold_pr(pr)
     logging.info(f"new PR opened {pr.url}")
     return pr
 
 
-def hold_pr(pr):    
+def hold_pr(pr):
     pr.create_issue_comment('/hold')
 
 

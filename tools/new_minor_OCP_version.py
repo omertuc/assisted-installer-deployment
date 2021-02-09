@@ -56,7 +56,8 @@ EXCLUDED_ENVIRONMENTS = {"integration-v3", "staging", "production"}  # Don't upd
 # assisted-service PR related constants
 ASSISTED_SERVICE_CLONE_DIR = "assisted-service"
 ASSISTED_SERVICE_GITHUB_REPO = "openshift/assisted-service"
-ASSISTED_SERVICE_CLONE_URL = f"https://{{user_password}}@github.com/{ASSISTED_SERVICE_GITHUB_REPO}.git"
+ASSISTED_SERVICE_GITHUB_FORK_REPO = "{github_user}/assisted-service"
+ASSISTED_SERVICE_CLONE_URL = f"https://{{user_login}}@github.com/{ASSISTED_SERVICE_GITHUB_FORK_REPO}.git"
 ASSISTED_SERVICE_UPSTREAM_URL = f"https://github.com/{ASSISTED_SERVICE_GITHUB_REPO}.git"
 ASSISTED_SERVICE_MASTER_DEFAULT_OCP_VERSIONS_JSON_URL = \
     f"https://raw.githubusercontent.com/{ASSISTED_SERVICE_GITHUB_REPO}/master/default_ocp_versions.json"
@@ -271,10 +272,13 @@ def get_all_version_ocp_update_tickets_summaries(jira_client):
     return set(issues)
 
 
-def clone_assisted_service(user_password):
+def clone_assisted_service(user_login):
+    username, _password = get_login(user_login)
+
     cmd(["rm", "-rf", ASSISTED_SERVICE_CLONE_DIR])
 
-    cmd(["git", "clone", ASSISTED_SERVICE_CLONE_URL.format(user_password=user_password), ASSISTED_SERVICE_CLONE_DIR])
+    cmd(["git", "clone",
+         ASSISTED_SERVICE_CLONE_URL.format(user_login=user_login, github_user=username), ASSISTED_SERVICE_CLONE_DIR])
 
     def git_cmd(*args: str):
         return cmd(("git", "-C", ASSISTED_SERVICE_CLONE_DIR) + args)
@@ -365,7 +369,7 @@ def commit_and_push_version_update_changes(new_version, message_prefix):
 
         git_cmd("commit", "-a", "-m", f"{message_prefix} Updating OCP latest onprem-config to {new_version}")
 
-    git_cmd("push", "upstream", f"HEAD:{branch}")
+    git_cmd("push", "origin", f"HEAD:{branch}")
     return branch
 
 

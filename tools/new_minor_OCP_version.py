@@ -192,7 +192,7 @@ def create_task(args, current_assisted_service_ocp_version, latest_ocp_version):
 
 
 def get_latest_ocp_version():
-    return "4.6.999999"
+    return "4.6.9999999"
     res = requests.get(OCP_LATEST_RELEASE_URL)
     if not res.ok:
         raise RuntimeError(f"GET {OCP_LATEST_RELEASE_URL} failed status {res.status_code}")
@@ -274,8 +274,7 @@ def get_all_version_ocp_update_tickets_summaries(jira_client):
 def clone_assisted_service(user_password):
     cmd(["rm", "-rf", ASSISTED_SERVICE_CLONE_DIR])
 
-    cmd(["git", "clone", ASSISTED_SERVICE_CLONE_URL.format(user_password=user_password),
-         "--depth=1", ASSISTED_SERVICE_CLONE_DIR])
+    cmd(["git", "clone", ASSISTED_SERVICE_CLONE_URL.format(user_password=user_password), ASSISTED_SERVICE_CLONE_DIR])
 
     def git_cmd(*args: str):
         return cmd(("git", "-C", ASSISTED_SERVICE_CLONE_DIR) + args)
@@ -289,8 +288,7 @@ def clone_app_interface(gitlab_key_file):
     cmd(["rm", "-rf", APP_INTERFACE_CLONE_DIR])
 
     cmd_with_git_ssh_key(gitlab_key_file)(
-        ["git", "clone", f"git@{APP_INTERFACE_GITLAB}:{APP_INTERFACE_GITLAB_REPO}.git", "--depth=1",
-         APP_INTERFACE_CLONE_DIR]
+        ["git", "clone", f"git@{APP_INTERFACE_GITLAB}:{APP_INTERFACE_GITLAB_REPO}.git", APP_INTERFACE_CLONE_DIR]
     )
 
 
@@ -379,7 +377,6 @@ def commit_and_push_version_update_changes_app_interface(key_file, fork, new_ver
 
     fork_remote_name = "fork"
 
-    git_cmd("fetch", "--unshallow", "origin")
     git_cmd("remote", "add", fork_remote_name, fork.ssh_url_to_repo)
     git_cmd("checkout", "-b", branch)
     git_cmd("commit", "-a", "-m", f'{message_prefix} Updating OCP version to {new_version}')

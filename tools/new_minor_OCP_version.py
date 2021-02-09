@@ -193,7 +193,7 @@ def create_task(args, current_assisted_service_ocp_version, latest_ocp_version):
 
 
 def get_latest_ocp_version():
-    return "4.6.99999999"
+    return "4.6.999999999"
     res = requests.get(OCP_LATEST_RELEASE_URL)
     if not res.ok:
         raise RuntimeError(f"GET {OCP_LATEST_RELEASE_URL} failed status {res.status_code}")
@@ -446,7 +446,7 @@ def update_ai_app_sre_repo_to_new_ocp_version(fork, args, new_ocp_version, opens
 def open_pr(args, current_version, new_version, task):
     branch = BRANCH_NAME.format(version=new_version)
 
-    github_client = github.Github(*get_login(args.git_user_password))
+    github_client = github.Github(*get_login(args.github_user_password))
     repo = github_client.get_repo(ASSISTED_SERVICE_GITHUB_REPO)
     body = " ".join([f"@{user}" for user in PR_MENTION])
     pr = repo.create_pull(

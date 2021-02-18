@@ -8,6 +8,7 @@ import argparse
 import tempfile
 import functools
 import subprocess
+import pathlib
 
 from packaging import version
 
@@ -53,9 +54,8 @@ RCHOS_FUTURE_LATEST_RELEASE_URL = "https://mirror.openshift.com/pub/openshift-v4
 RCHOS_LATEST_LIVE_ISO_URL = "https://mirror.openshift.com/pub/openshift-v4/dependencies/rhcos/latest/{version}/rhcos-{version}-x86_64-live.x86_64.iso"
 RCHOS_FUTURE_LATEST_LIVE_ISO_URL = "https://mirror.openshift.com/pub/openshift-v4/dependencies/rhcos/pre-release/latest/rhcos-{version}-x86_64-live.x86_64.iso"
 
-RCHOS_VERSION_FROM_ISO_REGEX = re.compile("coreos.liveiso=rhcos-(.*) ")
-RCHOS_VERSION_FROM_DEFAULT_REGEX = re.compile("coreos.liveiso=rhcos-(.*) ")
-DOWNLOAD_LIVE_ISO_CMD = "curl {live_iso_url} -o {out_file}"
+RCHOS_VERSION_FROM_ISO_REGEX = re.compile(r"coreos.liveiso=rhcos-(.*) ")
+RCHOS_VERSION_FROM_DEFAULT_REGEX = re.compile(r"coreos.liveiso=rhcos-(.*) ")
 
 # app-interface PR related constants
 APP_INTERFACE_CLONE_DIR = "app-interface"
@@ -64,7 +64,7 @@ APP_INTERFACE_GITLAB_REPO = f"service/{APP_INTERFACE_GITLAB_PROJECT}"
 APP_INTERFACE_GITLAB = "gitlab.cee.redhat.com"
 APP_INTERFACE_GITLAB_API = f'https://{APP_INTERFACE_GITLAB}'
 APP_INTERFACE_SAAS_YAML = f"{APP_INTERFACE_CLONE_DIR}/data/services/assisted-installer/cicd/saas.yaml"
-EXCLUDED_ENVIRONMENTS = {"integration-v3", "staging", "production"}  # Don't update OPENSHIFT_VERSIONS in these envs
+EXCLUDED_ENVIRONMENTS = {"staging", "production"}  # Don't update OPENSHIFT_VERSIONS in these envs
 
 # assisted-service PR related constants
 ASSISTED_SERVICE_CLONE_DIR = "assisted-service"
@@ -109,31 +109,36 @@ OCP_DR_TASK = "TEST-OCP-TASK"
 OCP_DR_FUTURE_TASK = "TEST-OCP-FUTURE-TASK"
 RHCOS_DR_TASK = "TEST-RHCOS-TASK"
 RHCOS_DR_FUTURE_TASK = "TEST-FUTURE-RHCOS-TASK"
-DRY_RUN_BRANCHES = ["TEST-OCP-TASK_update_ocp_version_to_1.2.3",
+DRY_RUN_BRANCHES = [f"TEST-OCP-TASK_update_ocp_version_to_{DRY_RUN_VERSION}",
                     "TEST-OCP-FUTURE-TASK_update_ocp_version_to_latest",
-                    "TEST-RHCOS-TASK_update_ocp_version_to_1.2.3",
-                    "TEST-FUTURE-RHCOS-TASK_update_ocp_version_to_1.2.3",
+                    f"TEST-RHCOS-TASK_update_ocp_version_to_{DRY_RUN_VERSION}",
+                    f"TEST-FUTURE-RHCOS-TASK_update_ocp_version_to_{DRY_RUN_VERSION}",
                     ]
+
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("-jup",  "--jira-user-password",    help="JIRA Username and password in the format of user:pass", required=True)
-    parser.add_argument("-gup",  "--github-user-password",  help="GITHUB Username and password in the format of user:pass", required=True)
-    parser.add_argument("-gkf",  "--gitlab-key-file",       help="GITLAB key file", required=True)
-    parser.add_argument("-gt",   "--gitlab-token",          help="GITLAB user token", required=True)
-    parser.add_argument("-jkup", "--jenkins-user-password", help="JENKINS Username and password in the format of user:pass", required=True)
-    parser.add_argument("--dry-run", action='store_true',   help="test run")
+    parser.add_argument("-jup", "--jira-user-password", help="JIRA Username and password in the format of user:pass",
+                        required=True)
+    parser.add_argument("-gup", "--github-user-password",
+                        help="GITHUB Username and password in the format of user:pass", required=True)
+    parser.add_argument("-gkf", "--gitlab-key-file", help="GITLAB key file", required=True)
+    parser.add_argument("-gt", "--gitlab-token", help="GITLAB user token", required=True)
+    parser.add_argument("-jkup", "--jenkins-user-password",
+                        help="JENKINS Username and password in the format of user:pass", required=True)
+    parser.add_argument("--dry-run", action='store_true', help="test run")
     return parser.parse_args()
+
 
 def ocp_version_update(args):
     logger.info("Searching and updating OCP version")
     latest_ocp_version = version.parse(get_latest_ocp_version())
+    ocp_version = f"{latest_ocp_version.major}.{latest_ocp_version.minor}"
 
-    ocp_version_major = "{major}.{minor}".format(major=latest_ocp_version.major, minor=latest_ocp_version.minor, micro=latest_ocp_version.micro)
-    current_assisted_service_ocp_version = get_default_ocp_version(ocp_version_major)
+    current_assisted_service_ocp_version = version.parse(get_default_ocp_version(ocp_version))
 
     if args.dry_run:
-        latest_ocp_version = DRY_RUN_VERSION
+        latest_ocp_version = version.parse(DRY_RUN_VERSION)
 
     if latest_ocp_version == current_assisted_service_ocp_version:
         logging.info(f"OCP version {latest_ocp_version} is up to date")
@@ -144,7 +149,8 @@ def ocp_version_update(args):
     latest version: {latest_ocp_version}
     current version {current_assisted_service_ocp_version}""")
 
-    jira_client, task = create_task(args, OCP_TICKET_DESCRIPTION, current_assisted_service_ocp_version, latest_ocp_version)
+    jira_client, task = create_task(args, OCP_TICKET_DESCRIPTION, current_assisted_service_ocp_version,
+                                    latest_ocp_version)
 
     if args.dry_run:
         task = OCP_DR_TASK
@@ -172,20 +178,22 @@ def ocp_version_update(args):
         app_interface_branch = update_ai_app_sre_repo_to_new_ocp_version(fork, args, latest_ocp_version,
                                                                          openshift_versions_json, task)
         gitlab_pr = open_app_interface_pr(fork, app_interface_branch, current_assisted_service_ocp_version,
-                                   latest_ocp_version,
-                                   task)
+                                          latest_ocp_version,
+                                          task)
 
         jira_client.add_comment(task, f"Created a PR in app-interface GitLab {gitlab_pr.web_url}")
         github_pr.create_issue_comment(f"Created a PR in app-interface GitLab {gitlab_pr.web_url}")
 
+
 def ocp_future_version_update(args):
     logger.info("Searching and updating future OCP version")
     latest_ocp_version = version.parse(get_latest_ocp_version())
-    future_version = "{major}.{minor}".format(major=latest_ocp_version.major, minor=latest_ocp_version.minor+1, micro=latest_ocp_version.micro)
+    future_version = "{major}.{minor}".format(major=latest_ocp_version.major, minor=latest_ocp_version.minor + 1,
+                                              micro=latest_ocp_version.micro)
     current_assisted_service_ocp_future_version = get_default_ocp_version(future_version)
 
-    current_assisted_service_ocp_future_version_split = current_assisted_service_ocp_future_version.rsplit(".", 1)
-    next_version = "{}.{}".format(current_assisted_service_ocp_future_version_split[0], str(int(current_assisted_service_ocp_future_version_split[1]) + 1))
+    major, minor, *_ = current_assisted_service_ocp_future_version.rsplit(".", 1)
+    next_version = f"{major}.{minor + 1}"
 
     if args.dry_run:
         next_version = "latest"
@@ -197,7 +205,8 @@ def ocp_future_version_update(args):
         logger.info("No new ocp version")
         return
 
-    jira_client, task = create_task(args, OCP_TICKET_DESCRIPTION, current_assisted_service_ocp_future_version, next_version)
+    jira_client, task = create_task(args, OCP_TICKET_DESCRIPTION, current_assisted_service_ocp_future_version,
+                                    next_version)
 
     if args.dry_run:
         task = OCP_DR_FUTURE_TASK
@@ -219,6 +228,7 @@ def ocp_future_version_update(args):
 
     github_pr = open_pr(args, current_assisted_service_ocp_future_version, next_version, task)
     unhold_pr(github_pr)
+
 
 def rhcos_version_update(args):
     logger.info("Searching and updating RHCOS version")
@@ -247,13 +257,15 @@ def rhcos_version_update(args):
         logging.info("Not creating PR because ticket already exists")
         return
 
-    create_updated_rhcos_pr(args, ocp_version_major, release_json, rhcos_default_release, rhcos_latest_release, task, RCHOS_LATEST_LIVE_ISO_URL)
+    create_updated_rhcos_pr(args, ocp_version_major, release_json, rhcos_default_release, rhcos_latest_release, task,
+                            RCHOS_LATEST_LIVE_ISO_URL)
 
 
 def rhcos_future_version_update(args):
     logger.info("Searching and updating RHCOS future version")
     latest_ocp_version = version.parse(get_latest_ocp_version())
-    future_version = "{major}.{minor}".format(major=latest_ocp_version.major, minor=latest_ocp_version.minor+1, micro=latest_ocp_version.micro)
+    future_version = "{major}.{minor}".format(major=latest_ocp_version.major, minor=latest_ocp_version.minor + 1,
+                                              micro=latest_ocp_version.micro)
 
     release_json = get_default_release_json()
 
@@ -267,7 +279,8 @@ def rhcos_future_version_update(args):
         logging.info(f"RCHOS version {rhcos_future_latest_release} is up to date")
         return
 
-    jira_client, task = create_task(args, RCHOS_TICKET_DESCRIPTION, rhcos_future_default_release, rhcos_future_latest_release)
+    jira_client, task = create_task(args, RCHOS_TICKET_DESCRIPTION, rhcos_future_default_release,
+                                    rhcos_future_latest_release)
 
     if args.dry_run:
         task = RHCOS_DR_FUTURE_TASK
@@ -277,7 +290,9 @@ def rhcos_future_version_update(args):
         logging.info("Not creating PR because ticket already exists")
         return
 
-    create_updated_rhcos_pr(args, future_version, release_json, rhcos_future_default_release, rhcos_future_latest_release, task, RCHOS_FUTURE_LATEST_LIVE_ISO_URL)
+    create_updated_rhcos_pr(args, future_version, release_json, rhcos_future_default_release,
+                            rhcos_future_latest_release, task, RCHOS_FUTURE_LATEST_LIVE_ISO_URL)
+
 
 def cmd(command, env=None, **kwargs):
     logging.info(f"Running command {command} with env {env} kwargs {kwargs}")
@@ -301,8 +316,9 @@ def cmd_with_git_ssh_key(key_file):
         "GIT_SSH_COMMAND": GIT_SSH_COMMAND_WITH_KEY.format(key=key_file)
     })
 
-def create_updated_rhcos_pr(args, ocp_version_major, release_json, rhcos_default_release, rhcos_latest_release, task, iso_url):
 
+def create_updated_rhcos_pr(args, ocp_version_major, release_json, rhcos_default_release, rhcos_latest_release, task,
+                            iso_url):
     clone_assisted_service(args.github_user_password)
     change_version_in_files(rhcos_default_release, rhcos_latest_release, RCHOS_RELEASE_REPLACE_CONTEXT)
 
@@ -329,19 +345,24 @@ def create_updated_rhcos_pr(args, ocp_version_major, release_json, rhcos_default
 
 def get_rchos_version_from_iso(rhcos_latest_release, iso_url):
     live_iso_url = iso_url.format(version=rhcos_latest_release)
-    with tempfile.NamedTemporaryFile() as tmp_live_iso_file:
-        subprocess.check_output(
-            DOWNLOAD_LIVE_ISO_CMD.format(live_iso_url=live_iso_url, out_file=tmp_live_iso_file.name), shell=True)
-        try:
-            os.remove("tmp/zipl.prm")
-        except:
-            pass
-        subprocess.check_output(f"7z x {tmp_live_iso_file.name} zipl.prm", shell=True, cwd="/tmp")
-        with open("/tmp/zipl.prm", 'r') as f:
+
+    with tempfile.NamedTemporaryFile() as f:
+        tmp_live_iso_file = f.name
+
+    cmd(["curl", live_iso_url, "-o", tmp_live_iso_file])
+
+    prm_file = "zipl.prm"
+    with tempfile.TemporaryDirectory() as d:
+        dpath = pathlib.Path(d.name)
+        cmd(["7z", "x", tmp_live_iso_file, prm_file], cwd=str(dpath))
+
+        with open(dpath / prm_file, "r") as f:
             zipl_info = f.read()
-        result = RCHOS_VERSION_FROM_ISO_REGEX.search(zipl_info)
-        rchos_version_from_iso = result.group(1)
-        logger.info(f"Found rchos_version_from_iso: {rchos_version_from_iso}")
+
+    result = RCHOS_VERSION_FROM_ISO_REGEX.search(zipl_info)
+    rchos_version_from_iso = result.group(1)
+    logger.info(f"Found rchos_version_from_iso: {rchos_version_from_iso}")
+
     return rchos_version_from_iso
 
 
@@ -359,6 +380,7 @@ def get_rchos_latest_release(rchos_latest_release_url):
     result = RHCOS_LIVE_ISO_REGEX.search(res.text)
     rhcos_latest_release = result.group(1)
     return rhcos_latest_release
+
 
 def test_changes(args, branch, pr):
     logging.info("testing changes")
@@ -385,7 +407,8 @@ def test_test_infra_passes(args, branch):
                              parameters={"SERVICE_BRANCH": branch,
                                          "NOTIFY": False,
                                          "JOB_NAME": "Update_ocp_version",
-                                         "SERVICE_REPO":ASSISTED_SERVICE_FORKED_URL.format(github_user=github_username)}
+                                         "SERVICE_REPO": ASSISTED_SERVICE_FORKED_URL.format(
+                                             github_user=github_username)}
                              )
     time.sleep(10)
     url = jenkins_client.get_build_info(TEST_INFRA_JOB, next_build_number)["url"]
@@ -400,9 +423,10 @@ def test_test_infra_passes(args, branch):
     return result == "SUCCESS", url
 
 
-def create_task(args, description,  current_assisted_service_ocp_version, latest_ocp_version):
+def create_task(args, description, current_assisted_service_ocp_version, latest_ocp_version):
     jira_client = get_jira_client(*get_login(args.jira_user_password))
-    task = create_jira_ticket(jira_client, description, latest_ocp_version, current_assisted_service_ocp_version, args.dry_run)
+    task = create_jira_ticket(jira_client, description, latest_ocp_version, current_assisted_service_ocp_version,
+                              args.dry_run)
     return jira_client, task
 
 
@@ -416,8 +440,8 @@ def get_latest_ocp_version():
     ocp_latest_release_data = yaml.load(version_yaml)
     return ocp_latest_release_data['Name']
 
-def get_default_ocp_version(ocp_version_major):
 
+def get_default_ocp_version(ocp_version_major):
     release_json = get_default_release_json()
 
     release_image = release_json[ocp_version_major]['release_image']
@@ -425,6 +449,7 @@ def get_default_ocp_version(ocp_version_major):
     result = OCP_VERSION_REGEX.search(release_image)
     ai_latest_ocp_version = result.group(1)
     return ai_latest_ocp_version
+
 
 def get_default_release_json():
     res = requests.get(ASSISTED_SERVICE_MASTER_DEFAULT_OCP_VERSIONS_JSON_URL)
@@ -548,7 +573,6 @@ def change_version_in_files_app_interface(openshift_versions_json):
 
     target_environments = {
         "integration": "/services/assisted-installer/namespaces/assisted-installer-integration.yml",
-        "integration-v3": "/services/assisted-installer/namespaces/assisted-installer-integration-v3.yml",
         "staging": "/services/assisted-installer/namespaces/assisted-installer-stage.yml",
         "production": "/services/assisted-installer/namespaces/assisted-installer-production.yml",
     }
@@ -628,6 +652,7 @@ def create_app_interface_fork(args):
             raise
     return fork
 
+
 def verify_latest_config():
     try:
         cmd(["make", "generate-ocp-version"], cwd=ASSISTED_SERVICE_CLONE_DIR)
@@ -636,6 +661,7 @@ def verify_latest_config():
             # We run the command just for its side-effects, we don't care if it fails
             return
         raise
+
 
 def update_ai_repo_to_new_version(args, old_version, new_version, replace_context, ticket_id):
     clone_assisted_service(args.github_user_password)
@@ -654,7 +680,7 @@ def update_ai_repo_to_new_version(args, old_version, new_version, replace_contex
 def update_ai_app_sre_repo_to_new_ocp_version(fork, args, new_ocp_version, openshift_versions_json, ticket_id):
     clone_app_interface(args.gitlab_key_file)
 
-    change_version_in_files_app_interface(openshift_versions_json, OCP_REPLACE_CONTEXT)
+    change_version_in_files_app_interface(openshift_versions_json)
 
     return commit_and_push_version_update_changes_app_interface(args.gitlab_key_file, fork, new_ocp_version, ticket_id)
 
@@ -701,8 +727,8 @@ def open_app_interface_pr(fork, branch, current_version, new_version, task):
 
     return pr
 
-def main(args):
 
+def main(args):
     if args.dry_run:
         delete_test_branches(args)
 
@@ -716,9 +742,10 @@ def delete_test_branches(args):
     clone_assisted_service(args.github_user_password)
     for branch in DRY_RUN_BRANCHES:
         try:
-            subprocess.check_output(f"git push origin --delete {branch}", shell=True, cwd=ASSISTED_SERVICE_CLONE_DIR)
-        except:
-                logger.info(f"Branch {branch} was not deleted on dry run cleanuo")
+            cmd(["git", "push", "origin", "--delete", branch], cwd=ASSISTED_SERVICE_CLONE_DIR)
+        except subprocess.CalledProcessError:
+            logger.info(f"Branch {branch} was not deleted on dry run cleanup, maybe it doesn't exist")
+
 
 if __name__ == "__main__":
     main(parse_args())
